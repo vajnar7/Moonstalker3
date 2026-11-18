@@ -15,4 +15,8 @@ object OpCodes {
     const val MOVE_START_LEFT = 11
     const val MOVE_START_RIGHT = 12
     const val MOVE_END = 13
+    const val NOT_CALIBRATED = 14
+    const val CALIBRATED = 15
+    const val CALIBRATE = 16
+    const val POSITION = 17
 }

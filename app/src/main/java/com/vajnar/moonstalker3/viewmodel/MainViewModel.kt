@@ -4,6 +4,8 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.vajnar.moonstalker3.processor.AstroDataRepo
+import com.vajnar.moonstalker3.processor.CelestialObj
 import com.vajnar.moonstalker3.processor.Commands
 import com.vajnar.moonstalker3.processor.OpCodes
 import com.vajnar.moonstalker3.processor.PingResponse
@@ -17,16 +19,28 @@ import kotlinx.coroutines.launch
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _status = MutableStateFlow(OpCodes.NOT_CONNECTED)
-    private val _mode = MutableStateFlow(OpCodes.NOT_CONNECTED)
+    private val _mode = MutableStateFlow(OpCodes.NOT_CALIBRATED)
     private val _alarm = MutableStateFlow(0) // 0: No alarm (Green), 1: Warning (Yellow), 2: Critical (Red)
     private val _alarmMessage = MutableStateFlow("No alarm")
     private val _infoMessage = MutableStateFlow("Idle")
+    private val _curObjName = MutableStateFlow("")
+    private val _toObjName = MutableStateFlow("")
+    private val _objectNames = MutableStateFlow<List<String>>(emptyList())
+    private val _curObject = MutableStateFlow(CelestialObj())
+    private val _azimuth = MutableStateFlow(0.0)
+    private val _altitude = MutableStateFlow(0.0)
+
+    private var objectDatabase = AstroDataRepo(HashMap())
 
     val status: StateFlow<Int> = _status.asStateFlow()
     val mode: StateFlow<Int> = _mode.asStateFlow()
     val alarm: StateFlow<Int> = _alarm.asStateFlow()
     val alarmMessage: StateFlow<String> = _alarmMessage.asStateFlow()
     val infoMessage: StateFlow<String> = _infoMessage.asStateFlow()
+    val toObjName: StateFlow<String> = _toObjName.asStateFlow()
+    val objectNames: StateFlow<List<String>> = _objectNames.asStateFlow()
+    val azimuth: StateFlow<Double> = _azimuth.asStateFlow()
+    val altitude: StateFlow<Double> = _altitude.asStateFlow()
 
     val processor = Processor(viewModelScope)
 
@@ -84,6 +98,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _status.value = OpCodes.CONNECTING
         }
 
+
+        processor.registerIo(OpCodes.CONNECTED) {
+            val res = Commands.cmdGetAstroData()
+            res.onSuccess { astroDataResponse ->
+                objectDatabase = astroDataResponse
+                _objectNames.value = objectDatabase.data.keys.sorted()
+            }.onFailure { exception ->
+                Log.e("MainViewModel", "GetAstroData failed: ${exception.message}")
+            }
+        }
         processor.registerUx(OpCodes.CONNECTED) {
             _infoMessage.value = "connected"
             _status.value = OpCodes.CONNECTED
@@ -94,6 +118,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         processor.registerIo(OpCodes.MOVE_START_LEFT) { Commands.cmdMoveStart("left") }
         processor.registerIo(OpCodes.MOVE_START_RIGHT) { Commands.cmdMoveStart("right") }
         processor.registerIo(OpCodes.MOVE_END) { Commands.cmdMoveStop() }
+
+        processor.registerIo(OpCodes.CALIBRATED) {
+            val res = Commands.cmdCalibrated()
+            res.onSuccess {
+                processor.execute(OpCodes.POSITION)
+            }.onFailure { exception ->
+                Log.e("MainViewModel", "Calibrated failed: ${exception.message}")
+            }
+        }
+        processor.registerUx(OpCodes.CALIBRATED) {
+            _curObjName.value = "Polaris"
+            _curObject.value = objectDatabase.data["Polaris"] ?: CelestialObj()
+        }
 
         pingScheduler.start()
     }
@@ -116,6 +153,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun onTargetObjectSelected(name: String) {
+        _toObjName.value = name
+    }
+
     fun performAction() {
         when (_status.value) {
             OpCodes.ERROR -> {
@@ -124,9 +165,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _alarmMessage.value = "No alarm"
                 _infoMessage.value = "Cleared error"
             }
-            OpCodes.NOT_CONNECTED -> {
-                processor.execute(OpCodes.CONNECT)
-            }
+            OpCodes.CONNECTED if _mode.value == OpCodes.NOT_CALIBRATED -> processor.execute(OpCodes.CALIBRATED)
+            OpCodes.NOT_CONNECTED -> processor.execute(OpCodes.CONNECT)
+
 
             else -> {
 //                processor.execute(OpCodes.RESET)

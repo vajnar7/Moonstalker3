@@ -9,6 +9,12 @@ import retrofit2.http.Body
 import retrofit2.http.Header
 import retrofit2.http.POST
 
+data class AstroDataRepo(
+    @SerializedName("data") val data: HashMap<String, CelestialObj>
+)
+
+typealias AstroDataResponse = AstroDataRepo
+
 data class PingResponse(
     @SerializedName("success") val success: Boolean = false,
     @SerializedName("message") val message: String = "",
@@ -69,6 +75,16 @@ interface CommandsApiService {
     suspend fun moveStop(
         @Header("Authorization") token: String? = null
     ): Response<Unit>
+
+    @POST("command/calibrated")
+    suspend fun calibrated(
+        @Header("Authorization") token: String? = null
+    ): Response<Unit>
+
+    @POST("command/getastrodata")
+    suspend fun getAstroData(
+        @Header("Authorization") token: String? = null
+    ): Response<AstroDataResponse>
 
     companion object {
         // Static Base URL & Port for the server

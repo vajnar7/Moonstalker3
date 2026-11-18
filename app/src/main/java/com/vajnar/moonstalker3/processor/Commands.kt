@@ -121,4 +121,43 @@ object Commands {
         }
     }
 
+    suspend fun cmdCalibrated(token: String? = null): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = if (token != null) {
+                    CommandsApiService.instance.calibrated(token = if (token.startsWith("Bearer ", ignoreCase = true)) token else "Bearer $token")
+                } else {
+                    CommandsApiService.instance.calibrated()
+                }
+                if (response.isSuccessful) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception("Server Error ${response.code()}: ${response.message()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun cmdGetAstroData(token: String? = null): Result<AstroDataResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = if (token != null) {
+                    CommandsApiService.instance.getAstroData(token = if (token.startsWith("Bearer ", ignoreCase = true)) token else "Bearer $token")
+                } else {
+                    CommandsApiService.instance.getAstroData()
+                }
+                if (response.isSuccessful) {
+                    val body = response.body() ?: AstroDataResponse(HashMap())
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("Server Error ${response.code()}: ${response.message()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
 }
